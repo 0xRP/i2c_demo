@@ -1,0 +1,14 @@
+neorv32_application_image.vhd
+neorv32_exe.bin
+neorv32_raw_exe.bin
+neorv32_raw_exe.coe
+neorv32_raw_exe.hex
+neorv32_raw_exe.mem
+neorv32_raw_exe.mif
+main.c.o
+main.elf
+main.asm
+main.bin
+.cache
+build
+compile_commands.json
