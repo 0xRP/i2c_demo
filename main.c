@@ -1,30 +1,52 @@
 #include <neorv32.h>
-// #include <stdint.h>
 #include <string.h>
 
-// Helper I2C (TWI) functions using the NEORV32 driver
-static inline void i2c_start(void) { neorv32_twi_generate_start(); }
-
-static inline void i2c_stop(void) { neorv32_twi_generate_stop(); }
-
-void print_hex_byte(uint8_t data) {
-
-  static const char symbols[] = "0123456789abcdef";
-
-  neorv32_uart0_putc(symbols[(data >> 4) & 15]);
-  neorv32_uart0_putc(symbols[(data >> 0) & 15]);
+/*===========================================================
+  Ejercicio 1: Funciones de Inicio y Parada del I2C
+  -----------------------------------------------------------
+  Se definen funciones inline para generar las condiciones de 
+  inicio y parada en el bus I2C usando el driver NEORV32.
+=============================================================*/
+static inline void i2c_start(void) {
+  // Genera la condición de inicio en I2C.
+  neorv32_twi_generate_start();
 }
 
-static inline int i2c_write_byte(uint8_t byte) {
-  // Send one byte; device returns ACK (0 = ACK, 1 = NACK)
+static inline void i2c_stop(void) {
+  // Genera la condición de parada en I2C.
+  neorv32_twi_generate_stop();
+}
 
-  // execute transmission (blocking)
+/*===========================================================
+  Ejercicio 2: Impresión de un Byte en Formato Hexadecimal
+  -----------------------------------------------------------
+  Se implementa una función para imprimir un byte en formato 
+  hexadecimal usando la UART.
+=============================================================*/
+void print_hex_byte(uint8_t data) {
+  static const char symbols[] = "0123456789abcdef";
+  
+  // Imprime el nibble superior (4 bits).
+  neorv32_uart0_putc(symbols[(data >> 4) & 0x0F]);
+  // Imprime el nibble inferior (4 bits).
+  neorv32_uart0_putc(symbols[data & 0x0F]);
+}
+
+/*===========================================================
+  Ejercicio 3: Función para Escribir un Byte en I2C
+  -----------------------------------------------------------
+  Se envía un byte por I2C y se verifica el acuse de recibo (ACK/NACK)
+  mostrando mensajes de depuración.
+=============================================================*/
+static inline int i2c_write_byte(uint8_t byte) {
+  // Transmitir el byte y almacenar el acuse de recibo del dispositivo.
   int device_ack = neorv32_twi_trans(&byte, 0);
 
+  // Depuración: imprimir el byte transmitido en hexadecimal.
   neorv32_uart0_printf("DEBUG: RX data=0x");
   print_hex_byte(byte);
 
-  // check device response?
+  // Imprimir la respuesta: "ACK" para 0, "NACK" para cualquier otro valor.
   neorv32_uart0_printf(" Response: ");
   if (device_ack == 0) {
     neorv32_uart0_printf("ACK\n");
@@ -35,150 +57,201 @@ static inline int i2c_write_byte(uint8_t byte) {
   return device_ack;
 }
 
+/*===========================================================
+  Ejercicio 4: Función para Leer un Byte en I2C
+  -----------------------------------------------------------
+  Se implementa la función para leer un byte del bus I2C, 
+  utilizando un parámetro para configurar el acuse.
+=============================================================*/
 static inline uint8_t i2c_read_byte(int ack) {
+  // Inicializa la variable con un valor por defecto.
   uint8_t byte = 0xFF;
-  // For reads: send ACK for all but the last byte (ack=1) and NACK (ack=0)
-  // after final byte.
+  // Lee el byte utilizando la función de transmisión con el parámetro ack.
   neorv32_twi_trans(&byte, ack);
   return byte;
 }
 
-// Multi-byte write: send device address and data bytes in one transaction.
+/*===========================================================
+  Ejercicio 5: Escritura de Múltiples Bytes en I2C
+  -----------------------------------------------------------
+  Se escribe una función que envía múltiples bytes, empezando 
+  por la dirección del dispositivo, y luego los datos.
+=============================================================*/
 static int i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
   i2c_start();
-  // Write address: 7-bit address shifted left by 1 with write bit (0)
+  
+  // Enviar la dirección del dispositivo (7 bits desplazados y bit de escritura 0).
   if (i2c_write_byte((dev_addr << 1) | 0) != 0) {
     i2c_stop();
     return -1;
   }
+  
+  // Enviar cada uno de los bytes de datos.
   for (uint8_t i = 0; i < len; i++) {
     if (i2c_write_byte(data[i]) != 0) {
       i2c_stop();
       return -1;
     }
   }
+  
   i2c_stop();
   return 0;
 }
 
-// Multi-byte read: send device read address then read 'len' bytes.
+/*===========================================================
+  Ejercicio 6: Lectura de Múltiples Bytes en I2C
+  -----------------------------------------------------------
+  Se implementa la función para leer múltiples bytes desde un 
+  dispositivo I2C, enviando ACK para todos excepto el último.
+=============================================================*/
 static int i2c_read(uint8_t dev_addr, uint8_t *data, uint8_t len) {
   i2c_start();
-  // Read address: write 7-bit address shifted left by 1 with read bit (1)
+  
+  // Enviar la dirección del dispositivo con el bit de lectura (1).
   if (i2c_write_byte((dev_addr << 1) | 1) != 0) {
     i2c_stop();
     return -1;
   }
+  
+  // Leer 'len' bytes: enviar ACK para todos excepto el último.
   for (uint8_t i = 0; i < len; i++) {
-    // For all but the last byte, send ACK (ack=1); for last byte, send NACK
-    // (ack=0)
     data[i] = i2c_read_byte((i < (len - 1)) ? 1 : 0);
   }
+  
   i2c_stop();
   return 0;
 }
 
-// AHT20 sensor routines
+/*===========================================================
+  Ejercicio 7: Inicialización del Sensor AHT20
+  -----------------------------------------------------------
+  Se inicializa el sensor AHT20 enviando el comando de 
+  inicialización y comprobando el estado de calibración.
+=============================================================*/
 #define AHT20_ADDRESS 0x38
 
-// Begin: send initialization command and check calibration status.
 int aht20_begin(void) {
   uint8_t init_cmd[3] = {0xBE, 0x08, 0x00};
 
-  // Send initialization command to AHT20.
+  // Enviar el comando de inicialización al sensor.
   if (i2c_write(AHT20_ADDRESS, init_cmd, 3) != 0) {
     return 0;
   }
-  // Allow time for initialization and calibration.
+  
+  // Esperar para la inicialización y calibración.
   neorv32_cpu_delay_ms(500);
 
-  // Read one status byte. Calibration bit (bit3) should be set.
+  // Leer el byte de estado para comprobar la calibración.
   uint8_t status = 0;
   if (i2c_read(AHT20_ADDRESS, &status, 1) != 0) {
     return 0;
   }
+  
+  // Verificar que el bit de calibración (bit 3) esté activado.
   if (!(status & 0x08)) {
-    // Calibration bit not set – sensor not ready.
     return 0;
   }
+  
   return 1;
 }
 
-// Trigger a measurement and read 6 bytes from the sensor.
+/*===========================================================
+  Ejercicio 8: Disparar una Medición
+  -----------------------------------------------------------
+  Se implementa la función que dispara una medición, 
+  espera la conversión y lee 6 bytes de datos.
+=============================================================*/
 int aht20_measure(uint8_t *data, uint8_t len) {
   if (len < 6)
     return -1;
+  
   uint8_t meas_cmd[3] = {0xAC, 0x33, 0x00};
 
-  // Trigger measurement.
+  // Enviar el comando para disparar la medición.
   if (i2c_write(AHT20_ADDRESS, meas_cmd, 3) != 0) {
     return -1;
   }
-  // Wait for conversion (~100 ms is typical).
+  
+  // Esperar a que la conversión se complete (~100 ms).
   neorv32_cpu_delay_ms(100);
 
-  // Read 6 bytes: status, humidity (20-bit) and temperature (20-bit).
+  // Leer 6 bytes de datos de medición.
   if (i2c_read(AHT20_ADDRESS, data, 6) != 0) {
     return -1;
   }
+  
   return 0;
 }
 
-// Parse humidity from 6-byte measurement data.
+/*===========================================================
+  Ejercicio 9: Interpretación de los Datos de Humedad
+  -----------------------------------------------------------
+  Se extrae y convierte el valor en bruto de 20 bits de 
+  humedad a porcentaje.
+=============================================================*/
 float aht20_getHumidity(const uint8_t *data) {
-  // Bytes: data[1] (MSB), data[2], and upper 4 bits of data[3]
   uint32_t raw_hum = ((uint32_t)data[1] << 12) | ((uint32_t)data[2] << 4) |
                      ((data[3] >> 4) & 0x0F);
   return (raw_hum * 100.0f) / 1048575.0f;
 }
 
-// Parse temperature from 6-byte measurement data.
+/*===========================================================
+  Ejercicio 10: Interpretación de los Datos de Temperatura
+  -----------------------------------------------------------
+  Se extrae y convierte el valor en bruto de 20 bits de 
+  temperatura a grados Celsius, incluyendo mensajes de 
+  depuración para el valor obtenido.
+=============================================================*/
 uint32_t aht20_getTemperature(const uint8_t *data) {
-  // Lower 4 bits of data[3], data[4], and data[5]
-  uint32_t raw_temp =
-      (((uint32_t)(data[3] & 0x0F)) << 16) | ((uint32_t)data[4] << 8) | data[5];
+  uint32_t raw_temp = (((uint32_t)(data[3] & 0x0F)) << 16) | ((uint32_t)data[4] << 8) | data[5];
 
+  // Mensajes de depuración para el valor en bruto.
   neorv32_uart0_printf("DEBUG: raw_temp = %u\n", raw_temp);
-  neorv32_uart0_printf("DEBUG: (raw_temp*200)/1048576 = %u\n",
-                       (raw_temp * 200) / 1048576 - 50);
+  neorv32_uart0_printf("DEBUG: (raw_temp*200)/1048576 = %u\n", (raw_temp * 200) / 1048576 - 50);
+  
   uint32_t ret = ((raw_temp * 200) / 1048576 - 50);
   return ret;
 }
 
-// Main program: similar to the Arduino example.
+/*===========================================================
+  Ejercicio 11: Programa Principal
+  -----------------------------------------------------------
+  Se integran todas las funciones: se configura la UART y
+  el I2C, se inicializa el sensor AHT20 y se entra en un 
+  bucle infinito que lee y muestra los datos de temperatura
+  y humedad cada 2 segundos.
+=============================================================*/
 int main(void) {
   uint8_t meas_data[6];
   uint32_t temperature, humidity;
 
-  // Setup runtime exception handling (optional debug).
+  // Configurar manejo de excepciones en tiempo de ejecución.
   neorv32_rte_setup();
 
-  // Check and initialize UART0.
+  // Verificar e inicializar la UART0.
   if (neorv32_uart0_available() == 0) {
     return 1;
   }
   neorv32_uart0_setup(19200, 0);
   neorv32_uart0_printf("AHT20 example\n");
 
-  // Check if TWI unit is available.
+  // Verificar que el controlador TWI (I2C) esté disponible.
   if (neorv32_twi_available() == 0) {
     neorv32_uart0_printf("ERROR! TWI controller not available!\n");
     return 1;
   }
 
-  // Setup TWI – using a chosen prescaler, divider, and clock stretching
-  // disabled.
+  // Configurar TWI con prescaler, divisor y sin stretching de reloj.
   neorv32_twi_setup(CLK_PRSC_2048, 15, 0);
 
-  // Initialize the AHT20 sensor.
+  // Inicializar el sensor AHT20.
   if (!aht20_begin()) {
-    neorv32_uart0_printf(
-        "AHT20 not detected. Please check wiring. Freezing.\n");
+    neorv32_uart0_printf("AHT20 not detected. Please check wiring. Freezing.\n");
     while (1)
       ;
   }
 
-  // Main loop: read and print temperature and humidity every 2 seconds.
+  // Bucle principal: leer e imprimir datos cada 2 segundos.
   for (;;) {
     if (aht20_measure(meas_data, 6) != 0) {
       neorv32_uart0_printf("Measurement error\n");
