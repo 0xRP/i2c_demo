@@ -1,6 +1,7 @@
 #include <neorv32.h>
 #include <string.h>
 
+
 /*===========================================================
   Ejercicio 1: Funciones de Inicio y Parada del I2C
   -----------------------------------------------------------
