@@ -4,6 +4,8 @@
   #include <neorv32.h>
 #endif
 
+#include "i2c_demo.h"
+
 /*===========================================================
   Ejercicio 1: Funciones de Inicio y Parada del I2C
   -----------------------------------------------------------
@@ -43,7 +45,7 @@ void print_hex_byte(uint8_t data) {
 =============================================================*/
 static inline uint32_t i2c_write_byte(uint8_t byte) {
   // Transmitir el byte y almacenar el acuse de recibo del dispositivo.
-  int device_ack = neorv32_twi_trans(&byte, 0);
+  int device_ack = neorv32_twi_trans(&byte, ACK);
 
   // Depuración: imprimir el byte transmitido en hexadecimal.
   neorv32_uart0_printf("DEBUG: RX data=0x");
@@ -84,14 +86,14 @@ static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
   i2c_start();
   
   // Enviar la dirección del dispositivo (7 bits desplazados y bit de escritura 0).
-  if (i2c_write_byte((dev_addr << 1) | 0) != 0) {
+  if (i2c_write_byte((dev_addr << 1) | 0) != ACK) {
     i2c_stop();
     return -1;
   }
   
   // Enviar cada uno de los bytes de datos.
   for (uint8_t i = 0; i < len; i++) {
-    if (i2c_write_byte(data[i]) != 0) {
+    if (i2c_write_byte(data[i]) != ACK) {
       i2c_stop();
       return -1;
     }
@@ -111,14 +113,14 @@ static uint32_t i2c_read(uint8_t dev_addr, uint8_t *data, uint8_t len) {
   i2c_start();
   
   // Enviar la dirección del dispositivo con el bit de lectura (1).
-  if (i2c_write_byte((dev_addr << 1) | 1) != 0) {
+  if (i2c_write_byte((dev_addr << 1) | 1) != ACK) {
     i2c_stop();
     return -1;
   }
   
   // Leer 'len' bytes: enviar ACK para todos excepto el último.
   for (uint8_t i = 0; i < len; i++) {
-    data[i] = i2c_read_byte((i < (len - 1)) ? 1 : 0);
+    data[i] = i2c_read_byte((i < (len - 1)) ? NACK : ACK);
   }
   
   i2c_stop();
@@ -137,7 +139,7 @@ uint32_t aht20_begin(void) {
   uint8_t init_cmd[3] = {0xBE, 0x08, 0x00};
 
   // Enviar el comando de inicialización al sensor.
-  if (i2c_write(AHT20_ADDRESS, init_cmd, 3) != 0) {
+  if (i2c_write(AHT20_ADDRESS, init_cmd, 3) != ACK) {
     return 0;
   }
   
@@ -146,7 +148,7 @@ uint32_t aht20_begin(void) {
 
   // Leer el byte de estado para comprobar la calibración.
   uint8_t status = 0;
-  if (i2c_read(AHT20_ADDRESS, &status, 1) != 0) {
+  if (i2c_read(AHT20_ADDRESS, &status, 1) != ACK) {
     return 0;
   }
   
@@ -171,7 +173,7 @@ uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   uint8_t meas_cmd[3] = {0xAC, 0x33, 0x00};
 
   // Enviar el comando para disparar la medición.
-  if (i2c_write(AHT20_ADDRESS, meas_cmd, 3) != 0) {
+  if (i2c_write(AHT20_ADDRESS, meas_cmd, 3) != ACK) {
     return -1;
   }
   
@@ -179,7 +181,7 @@ uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   neorv32_cpu_delay_ms(100);
 
   // Leer 6 bytes de datos de medición.
-  if (i2c_read(AHT20_ADDRESS, data, 6) != 0) {
+  if (i2c_read(AHT20_ADDRESS, data, 6) != ACK) {
     return -1;
   }
   

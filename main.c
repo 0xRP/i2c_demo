@@ -41,14 +41,14 @@ int main(void) {
 
   // Bucle principal: leer e imprimir datos cada 2 segundos.
   for (;;) {
-    if (aht20_measure(meas_data, 6) != 0) {
+    if (aht20_measure(meas_data, 6) != ACK) {
       neorv32_uart0_printf("Measurement error\n");
     } else {
       temperature = aht20_getTemperature(meas_data);
       humidity = aht20_getHumidity(meas_data);
       neorv32_uart0_printf("T: %u C\t H: %u RH\n", temperature, humidity);
     }
-    neorv32_cpu_delay_ms(100);
+    neorv32_cpu_delay_ms(2000);
   }
 
   return 0;
