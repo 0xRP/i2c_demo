@@ -23,6 +23,8 @@ USER_FLAGS += -Wl,--defsym,__neorv32_ram_size=8k
 #USER_FLAGS += -Wl,--defsym,__neorv32_heap_size=1k
 
 # Additional sources
+#APP_SRC += ./i2c_demo.c
+APP_SRC += ./main.c ./i2c_demo.c
 #APP_SRC += $(wildcard ./*.c)
 #APP_INC += -I .
 
@@ -31,3 +33,6 @@ NEORV32_HOME ?= ../../..
 
 # Include the main NEORV32 makefile
 include $(NEORV32_HOME)/sw/common/common.mk
+
+em:
+	gcc -DEMULATOR -g -Wall -o emulator emulator.c i2c_demo.c && ./emulator
