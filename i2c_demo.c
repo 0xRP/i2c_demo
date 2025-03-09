@@ -9,8 +9,8 @@
 /*===========================================================
   Ejercicio 1: Funciones de Inicio y Parada del I2C
   -----------------------------------------------------------
-  Se definen funciones inline para generar las condiciones de 
-  inicio y parada en el bus I2C usando el driver NEORV32.
+  Funciones inline para generar las condiciones de inicio y 
+  parada en el bus I2C.
 =============================================================*/
 static inline void i2c_start(void) {
   // Genera la condición de inicio en I2C.
@@ -25,8 +25,7 @@ static inline void i2c_stop(void) {
 /*===========================================================
   Ejercicio 2: Impresión de un Byte en Formato Hexadecimal
   -----------------------------------------------------------
-  Se implementa una función para imprimir un byte en formato 
-  hexadecimal usando la UART.
+  Función para imprimir un byte en formato hexadecimal usando la UART.
 =============================================================*/
 void print_hex_byte(uint8_t data) {
   static const char symbols[] = "0123456789abcdef";
@@ -65,13 +64,13 @@ static inline uint32_t i2c_write_byte(uint8_t byte) {
 /*===========================================================
   Ejercicio 4: Función para Leer un Byte en I2C
   -----------------------------------------------------------
-  Se implementa la función para leer un byte del bus I2C, 
-  utilizando un parámetro para configurar el acuse.
+  Se lee un byte del bus I2C, utilizando un parámetro para configurar el
+  acuse de recibo (ACK/NACK).
 =============================================================*/
 static inline uint8_t i2c_read_byte(int ack) {
   // Inicializa la variable con un valor por defecto.
   uint8_t byte = 0xFF;
-  // Lee el byte utilizando la función de transmisión con el parámetro ack.
+  // Lee el byte utilizando la función de transmisión con el parámetro "ack".
   neorv32_twi_trans(&byte, ack);
   return byte;
 }
@@ -79,8 +78,8 @@ static inline uint8_t i2c_read_byte(int ack) {
 /*===========================================================
   Ejercicio 5: Escritura de Múltiples Bytes en I2C
   -----------------------------------------------------------
-  Se escribe una función que envía múltiples bytes, empezando 
-  por la dirección del dispositivo, y luego los datos.
+  Función que envía múltiples bytes, empezando 
+  por la dirección del dispositivo, luego los datos.
 =============================================================*/
 static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
   i2c_start();
@@ -106,7 +105,7 @@ static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
 /*===========================================================
   Ejercicio 6: Lectura de Múltiples Bytes en I2C
   -----------------------------------------------------------
-  Se implementa la función para leer múltiples bytes desde un 
+  Función para leer múltiples bytes desde un 
   dispositivo I2C, enviando ACK para todos excepto el último.
 =============================================================*/
 static uint32_t i2c_read(uint8_t dev_addr, uint8_t *data, uint8_t len) {
@@ -164,7 +163,8 @@ uint32_t aht20_begin(void) {
   Ejercicio 8: Disparar una Medición
   -----------------------------------------------------------
   Se implementa la función que dispara una medición, 
-  espera la conversión y lee 6 bytes de datos.
+  espera la medición y lee 6 bytes de datos.
+  [SS] [HH] [HH] [HT] [TT] [TT]
 =============================================================*/
 uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   if (len < 6)
@@ -192,7 +192,7 @@ uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   Ejercicio 9: Interpretación de los Datos de Humedad
   -----------------------------------------------------------
   Se extrae y convierte el valor en bruto de 20 bits de 
-  humedad a porcentaje.
+  humedad a porcentaje. [SS] [HH] [HH] [HT] [TT] [TT]
 =============================================================*/
 uint32_t aht20_getHumidity(const uint8_t *data) {
   uint32_t raw_hum = ((uint32_t)data[1] << 12) | ((uint32_t)data[2] << 4) |
@@ -205,7 +205,7 @@ uint32_t aht20_getHumidity(const uint8_t *data) {
   -----------------------------------------------------------
   Se extrae y convierte el valor en bruto de 20 bits de 
   temperatura a grados Celsius, incluyendo mensajes de 
-  depuración para el valor obtenido.
+  depuración para el valor obtenido. [SS] [HH] [HH] [HT] [TT] [TT]
 =============================================================*/
 uint32_t aht20_getTemperature(const uint8_t *data) {
   uint32_t raw_temp = (((uint32_t)(data[3] & 0x0F)) << 16) | ((uint32_t)data[4] << 8) | data[5];
