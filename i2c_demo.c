@@ -46,11 +46,11 @@ static inline uint32_t i2c_write_byte(uint8_t byte) {
   // Transmitir el byte y almacenar el acuse de recibo del dispositivo.
   int device_ack = neorv32_twi_trans(&byte, ACK);
 
-  // Depuración: imprimir el byte transmitido en hexadecimal.
+  //Depuración (OPCIONAL): imprime el byte transmitido en hexadecimal.
   neorv32_uart0_printf("DEBUG: RX data=0x");
   print_hex_byte(byte);
 
-  // Imprimir la respuesta: "ACK" para 0, "NACK" para cualquier otro valor.
+  // Imprime la respuesta: "ACK" para 0, "NACK" para cualquier otro valor.
   neorv32_uart0_printf(" Response: ");
   if (device_ack == 0) {
     neorv32_uart0_printf("ACK\n");
@@ -82,15 +82,16 @@ static inline uint8_t i2c_read_byte(int ack) {
   por la dirección del dispositivo, luego los datos.
 =============================================================*/
 static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
+  // Condición de inicio en I2C.
   i2c_start();
   
-  // Enviar la dirección del dispositivo (7 bits desplazados y bit de escritura 0).
+  // Envía la dirección del dispositivo (7 bits desplazados y bit de escritura 0) y se comprueba que hay ACK.
   if (i2c_write_byte((dev_addr << 1) | 0) != ACK) {
     i2c_stop();
     return -1;
   }
   
-  // Enviar cada uno de los bytes de datos.
+  // Envía cada uno de los bytes de datos, comprobando que hay ACK.
   for (uint8_t i = 0; i < len; i++) {
     if (i2c_write_byte(data[i]) != ACK) {
       i2c_stop();
@@ -98,6 +99,7 @@ static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
     }
   }
   
+  // Condición de parada en I2C.
   i2c_stop();
   return 0;
 }
@@ -109,19 +111,21 @@ static uint32_t i2c_write(uint8_t dev_addr, const uint8_t *data, uint8_t len) {
   dispositivo I2C, enviando ACK para todos excepto el último.
 =============================================================*/
 static uint32_t i2c_read(uint8_t dev_addr, uint8_t *data, uint8_t len) {
+  // Condición de inicio en I2C.
   i2c_start();
   
-  // Enviar la dirección del dispositivo con el bit de lectura (1).
+  // Envía la dirección del dispositivo con el bit de lectura (1) y se comprueba que hay ACK.
   if (i2c_write_byte((dev_addr << 1) | 1) != ACK) {
     i2c_stop();
     return -1;
   }
   
-  // Leer 'len' bytes: enviar ACK para todos excepto el último.
+  // Lee 'len' bytes: Envía ACK para todos excepto el último.
   for (uint8_t i = 0; i < len; i++) {
     data[i] = i2c_read_byte((i < (len - 1)) ? NACK : ACK);
   }
   
+  // Condición de parada en I2C.
   i2c_stop();
   return 0;
 }
@@ -137,21 +141,21 @@ static uint32_t i2c_read(uint8_t dev_addr, uint8_t *data, uint8_t len) {
 uint32_t aht20_begin(void) {
   uint8_t init_cmd[3] = {0xBE, 0x08, 0x00};
 
-  // Enviar el comando de inicialización al sensor.
+  // Envía el comando de inicialización al sensor.
   if (i2c_write(AHT20_ADDRESS, init_cmd, 3) != ACK) {
     return 0;
   }
   
-  // Esperar para la inicialización y calibración.
+  // Espera para la inicialización y calibración.
   neorv32_cpu_delay_ms(500);
 
-  // Leer el byte de estado para comprobar la calibración.
+  // Lee el byte de estado para comprobar la calibración.
   uint8_t status = 0;
   if (i2c_read(AHT20_ADDRESS, &status, 1) != ACK) {
     return 0;
   }
   
-  // Verificar que el bit de calibración (bit 3) esté activado.
+  // Verifica que el bit de calibración (bit 3) esté activado.
   if (!(status & 0x08)) {
     return 0;
   }
@@ -172,15 +176,15 @@ uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   
   uint8_t meas_cmd[3] = {0xAC, 0x33, 0x00};
 
-  // Enviar el comando para disparar la medición.
+  // Envía el comando para disparar la medición.
   if (i2c_write(AHT20_ADDRESS, meas_cmd, 3) != ACK) {
     return -1;
   }
   
-  // Esperar a que la conversión se complete (~100 ms).
+  // Espera a que la conversión se complete (~100 ms).
   neorv32_cpu_delay_ms(100);
 
-  // Leer 6 bytes de datos de medición.
+  // Lee 6 bytes de datos de medición.
   if (i2c_read(AHT20_ADDRESS, data, 6) != ACK) {
     return -1;
   }
@@ -195,8 +199,8 @@ uint32_t aht20_measure(uint8_t *data, uint8_t len) {
   humedad a porcentaje. [SS] [HH] [HH] [HT] [TT] [TT]
 =============================================================*/
 uint32_t aht20_getHumidity(const uint8_t *data) {
-  uint32_t raw_hum = ((uint32_t)data[1] << 12) | ((uint32_t)data[2] << 4) |
-                     ((data[3] >> 4) & 0x0F);
+  uint32_t raw_hum = ((uint32_t)data[1] << 12) | ((uint32_t)data[2] << 4) | ((data[3] >> 4) & 0x0F);
+  // Se realiza la conversión y se retorna la humedad en porcentaje.
   return (raw_hum * 100) / 1048575;
 }
 
@@ -210,10 +214,11 @@ uint32_t aht20_getHumidity(const uint8_t *data) {
 uint32_t aht20_getTemperature(const uint8_t *data) {
   uint32_t raw_temp = (((uint32_t)(data[3] & 0x0F)) << 16) | ((uint32_t)data[4] << 8) | data[5];
 
-  // Mensajes de depuración para el valor en bruto.
+  // Mensajes de depuración para el valor en bruto (OPCIONAL).
   neorv32_uart0_printf("DEBUG: raw_temp = %u\n", raw_temp);
   neorv32_uart0_printf("DEBUG: (raw_temp*200)/1048576 = %u\n", (raw_temp * 200) / 1048576 - 50);
   
+  // Se realiza la conversión y se retorna la temperatura en celsius.
   uint32_t ret = ((raw_temp * 200) / 1048576 - 50);
   return ret;
 }
